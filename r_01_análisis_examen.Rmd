@@ -1,0 +1,126 @@
+---
+title: "R_01_análisis"
+author: "Felipe Pacheco"
+date: '2022-07-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# 1. Cargar librerías
+```{r, include=FALSE}
+pacman::p_load(sjPlot,
+               tidyverse,
+               srvyr,
+               survey,
+               magrittr)
+```
+ 
+# 2. Cargar datos
+```{r, include=FALSE}
+datos_proc <- read_rds(file= "../output/data/datos_proc.rds")
+```
+
+# 3. Creacion del objeto encuesta
+```{r}
+epfpersonas_objeto <- as_survey_design(datos_proc,
+                                       ids = VARUNIT,
+                                       strata = VARSTRAT,
+                                       weights = FE)
+```
+# 4. Exploramos tendencias de los datos
+# 4.1 Media de los ingresos por zona
+```{r}
+epfpersonas_objeto %>% 
+  group_by(ZONA) %>% 
+  summarise(ing_medio = survey_mean(ingresostot, vartype = "ci", level = .95, na.rm=T))
+```
+# 4.2 Media de los gastos por zona
+```{r}
+epfpersonas_objeto %>% 
+  group_by(ZONA) %>% 
+  summarise(gastos = survey_mean(GASTOT_HD, vartype = "ci", level = .95, na.rm=T))
+```
+# 4.3 Gráfico de análisis de correlación
+```{r}
+datos_proc%>%
+  plot_scatter(., ZONA, ingresostot,
+               title="Asociación entre ingresos y zona de residencia",
+               fit.grps = "lm", grid = TRUE)
+
+datos_proc%>%
+  plot_scatter(., ZONA, GASTOT_HD,
+               title="Asociación entre gastos y zona de residencia",
+               fit.grps = "lm", grid = TRUE)
+
+```
+
+# 5. Planteamiento de las hipótesis nulas
+1. El costo de la vida es mayor en las regiones.
+2. En santiago existe una mayor frecuencia de dueño de sus viviendas
+3. Fuera de santiago se presentará una mayor frecuencia de viviendas no adecuadas
+
+# 6. Modelos de regresión lineal simple
+```{r}
+modelo1 <- lm(ingresostot ~ ZONA,
+              data = datos_proc,
+              weights = FE)
+summary(modelo1)
+
+modelo2 <- lm(GASTOT_HD ~ ZONA,
+              data = datos_proc,
+              weights = FE)
+summary(modelo2)
+
+
+```
+
+# 6.1 Tabla comparativa de los modelos 1 y 2
+```{r}
+sjPlot::tab_model(list(modelo1, modelo2),
+                  show.ci = F,
+                  title = "Tabla de modelos de regresión lineal",
+                  p.style = "stars",
+                  df.method = "wald",
+                  encoding = "UTF-8",
+                  string.pred = "Predictores",
+                  string.est = "β",
+                 
+                  dv.labels = c("Modelo1", "Modelo2"))
+
+```
+# 6.2 Interpretación de los primeros modelos de regresión lineal simple
+Lo que nos indican los coeficientes en el primer modelo es que el promedio del ingreso total, en zonas que no son del Gran Santiago es de `r modelo1$coefficients[2]`menor que en el Gran Santiago. Por otro lado, la significancia del modelo está indicada por 3 astericos que quiere decir que es mayor que un 99%.
+
+El segundo modelo indica que el gasto de los hogares en zonas que no son del Gran Santiago es de `r modelo2$coefficients[2]`menos que en Santiago. La signficancia es, igual que el modelo anterior, muy alta con 3 astericos, indicando una signficancia mayor que el 99%. 
+
+Con esto podemos aceptar la primera hipótesis nula que se presentó en un comienzo, ya que al observar los resultados del segundo modelo que indica los gastos en promedio de los hogares contrastados con los ingresos promedios, vemos que la vida sí es mas cara en las regiones, debido a que en promedio el gasto disminuye en 200 mil pesos pero los ingresos disminuyen en 400 mil pesos.
+
+# 7. Modelos de regresión lineal
+```{r}
+modelo3 <- lm(tipotenenciahog ~ ZONA + NPERSONAS + ingresostot,
+              data = datos_proc, 
+              weights = FE)
+summary(modelo3)
+
+modelo4 <- lm(tipovivienda ~ ZONA + NPERSONAS + ingresostot,
+              data = datos_proc,
+              weights = FE)
+summary(modelo4)
+```
+# 7.1 Tabla comparativa de modelos 3 y 4
+```{r}
+sjPlot::tab_model(list(modelo3, modelo4),
+                  show.ci = F,
+                  title = "Tabla de modelos de regresión lineal",
+                  p.style = "stars",
+                  df.method = "wald",
+                  encoding = "UTF-8",
+                  string.pred = "Predictores",
+                  string.est = "β",
+                 
+                  dv.labels = c("Modelo 3", "Modelo 4"))
+
+```
